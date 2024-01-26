@@ -20,47 +20,49 @@ package gojwtjwks
 
 import (
 	"encoding/json"
-	"errors"
-	"fmt"
 	"net/http"
 )
 
-// JWKSURLResolver provides an interface for users to define how to resolve
-type JWKSURLResolver interface {
-	Resolve() (string, error)
+type JWKRetriever interface {
+	Retrieve(resolver JWKSURLResolver) (*JsonWebKeySet, error)
 }
 
-type JWKURLString string
+type JWKRetrieverWeb struct{}
 
-func (url JWKURLString) Resolve() string {
-	return string(url)
+func NewJWKRetrieverWeb() *JWKRetrieverWeb {
+	return &JWKRetrieverWeb{}
 }
 
-type JWKURLFromOIDCProvider struct {
-	ProviderURL string
-}
-
-func NewJWKURLFromOIDCProvider(baseurl string) *JWKURLFromOIDCProvider {
-	return &JWKURLFromOIDCProvider{
-		ProviderURL: baseurl,
-	}
-}
-
-func (conf *JWKURLFromOIDCProvider) Resolve() (string, error) {
-	resp, e := http.Get(fmt.Sprintf("%s/.well-known/openid-configuration", conf.ProviderURL))
+func (r *JWKRetrieverWeb) Retrieve(resolver JWKSURLResolver) (*JsonWebKeySet, error) {
+	url, e := resolver.Resolve()
 	if e != nil {
-		return "", e
+		return nil, e
+	}
+
+	resp, e := http.Get(url)
+	if e != nil {
+		return nil, e
 	}
 
 	dec := json.NewDecoder(resp.Body)
-	val := make(map[string]interface{})
+	val := new(JsonWebKeySet)
 	if e := dec.Decode(&val); e != nil {
-		return "", e
+		return nil, e
 	}
 
-	if v, ok := val["jwks_uri"]; ok {
-		return v.(string), nil
-	} else {
-		return "", errors.New("jwks URI not found with provider")
+	return val, nil
+}
+
+type JWKRetrieverInternal struct {
+	Set *JsonWebKeySet
+}
+
+func NewJWKRetrieverInternal(set *JsonWebKeySet) *JWKRetrieverInternal {
+	return &JWKRetrieverInternal{
+		Set: set,
 	}
+}
+
+func (r *JWKRetrieverInternal) Retrieve(_ JWKSURLResolver) (*JsonWebKeySet, error) {
+	return r.Set, nil
 }
