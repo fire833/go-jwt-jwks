@@ -21,6 +21,7 @@ package gojwtjwks
 import (
 	"encoding/json"
 	"net/http"
+	"time"
 )
 
 type JWKRetriever interface {
@@ -51,6 +52,39 @@ func (r *JWKRetrieverWeb) Retrieve(resolver JWKSURLResolver) (*JsonWebKeySet, er
 	}
 
 	return val, nil
+}
+
+type JWKRetrieverWebCaching struct {
+	cached    *JsonWebKeySet
+	retrieved time.Time
+	interval  time.Duration
+	internal  *JWKRetrieverWeb
+}
+
+func NewJWKRetrieverWebCaching(interval time.Duration) *JWKRetrieverWebCaching {
+	return &JWKRetrieverWebCaching{
+		cached:    nil,
+		retrieved: time.Unix(0, 0),
+		interval:  interval,
+		internal:  NewJWKRetrieverWeb(),
+	}
+}
+
+func (r *JWKRetrieverWebCaching) Retrieve(resolver JWKSURLResolver) (*JsonWebKeySet, error) {
+	// If we have not initialized the cache, or if our cached credentials are expired, renew them.
+	if r.cached == nil || r.retrieved == time.Unix(0, 0) || r.retrieved.Add(r.interval).After(time.Now()) {
+		k, e := r.internal.Retrieve(resolver)
+		if e != nil {
+			return nil, e
+		} else {
+			r.cached = k
+			r.retrieved = time.Now()
+			return k, nil
+		}
+		// otherwise return cache
+	} else {
+		return r.cached, nil
+	}
 }
 
 type JWKRetrieverInternal struct {
