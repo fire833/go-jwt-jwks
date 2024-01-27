@@ -18,16 +18,35 @@
 
 package gojwtjwks
 
-import "github.com/golang-jwt/jwt/v5"
+import (
+	"testing"
+)
 
-func VerifyJWT(input string, claims jwt.Claims, keyFunc jwt.Keyfunc, methods []string, aud, iss, sub string) (*jwt.Token, error) {
-	return jwt.ParseWithClaims(input, claims, keyFunc, jwt.WithExpirationRequired(),
-		jwt.WithStrictDecoding(), jwt.WithValidMethods(methods),
-		jwt.WithAudience(aud), jwt.WithIssuer(iss), jwt.WithSubject(sub))
-}
-
-func NewKeyFunc(resolver JWKRetriever, jwkurl JWKSURLResolver) jwt.Keyfunc {
-	return func(t *jwt.Token) (interface{}, error) {
-		return resolver.Retrieve(jwkurl)
+func TestJWKRetrieverWeb_Retrieve(t *testing.T) {
+	tests := []struct {
+		name     string
+		resolver JWKSURLResolver
+		wantErr  bool
+	}{
+		{
+			name:     "testGoogle",
+			resolver: NewJWKURLFromOIDCProvider("https://accounts.google.com/"),
+			wantErr:  false,
+		},
+		{
+			name:     "testMicrosoft",
+			resolver: NewJWKURLFromOIDCProvider("https://login.microsoftonline.com/common/v2.0"),
+			wantErr:  false,
+		},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			r := &JWKRetrieverWeb{}
+			_, err := r.Retrieve(tt.resolver)
+			if (err != nil) != tt.wantErr {
+				t.Errorf("JWKRetrieverWeb.Retrieve() error = %v, wantErr %v", err, tt.wantErr)
+				return
+			}
+		})
 	}
 }

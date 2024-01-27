@@ -19,38 +19,11 @@
 package gojwtjwks
 
 import (
-	"testing"
+	"encoding/base64"
+	"strings"
 )
 
-func TestJWKRetrieverWeb_Retrieve(t *testing.T) {
-	tests := []struct {
-		name     string
-		resolver JWKSURLResolver
-		wantErr  bool
-	}{
-		{
-			name:     "testGoogle",
-			resolver: NewJWKURLFromOIDCProvider("https://accounts.google.com/"),
-			wantErr:  false,
-		},
-		{
-			name:     "testMicrosoft",
-			resolver: NewJWKURLFromOIDCProvider("https://login.microsoftonline.com/common/v2.0"),
-			wantErr:  false,
-		},
-	}
-	for _, tt := range tests {
-		t.Run(tt.name, func(t *testing.T) {
-			r := &JWKRetrieverWeb{}
-			got, err := r.Retrieve(tt.resolver)
-			if (err != nil) != tt.wantErr {
-				t.Errorf("JWKRetrieverWeb.Retrieve() error = %v, wantErr %v", err, tt.wantErr)
-				return
-			}
-
-			for _, key := range got.Keys {
-				t.Log(*key)
-			}
-		})
-	}
+func parsebase64TrimPadding(s string) ([]byte, error) {
+	s = strings.TrimRight(s, "=")
+	return base64.RawURLEncoding.DecodeString(s)
 }

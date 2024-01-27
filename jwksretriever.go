@@ -22,10 +22,12 @@ import (
 	"encoding/json"
 	"net/http"
 	"time"
+
+	"github.com/golang-jwt/jwt/v5"
 )
 
 type JWKRetriever interface {
-	Retrieve(resolver JWKSURLResolver) (*JsonWebKeySet, error)
+	Retrieve(resolver JWKSURLResolver) (jwt.VerificationKeySet, error)
 }
 
 type JWKRetrieverWeb struct{}
@@ -34,28 +36,28 @@ func NewJWKRetrieverWeb() *JWKRetrieverWeb {
 	return &JWKRetrieverWeb{}
 }
 
-func (r *JWKRetrieverWeb) Retrieve(resolver JWKSURLResolver) (*JsonWebKeySet, error) {
+func (r *JWKRetrieverWeb) Retrieve(resolver JWKSURLResolver) (jwt.VerificationKeySet, error) {
 	url, e := resolver.Resolve()
 	if e != nil {
-		return nil, e
+		return jwt.VerificationKeySet{}, e
 	}
 
 	resp, e := http.Get(url)
 	if e != nil {
-		return nil, e
+		return jwt.VerificationKeySet{}, e
 	}
 
 	dec := json.NewDecoder(resp.Body)
 	val := new(JsonWebKeySet)
 	if e := dec.Decode(&val); e != nil {
-		return nil, e
+		return jwt.VerificationKeySet{}, e
 	}
 
-	return val, nil
+	return val.ToVerificationKeySet()
 }
 
 type JWKRetrieverWebCaching struct {
-	cached    *JsonWebKeySet
+	cached    *jwt.VerificationKeySet
 	retrieved time.Time
 	interval  time.Duration
 	internal  *JWKRetrieverWeb
@@ -70,20 +72,20 @@ func NewJWKRetrieverWebCaching(interval time.Duration) *JWKRetrieverWebCaching {
 	}
 }
 
-func (r *JWKRetrieverWebCaching) Retrieve(resolver JWKSURLResolver) (*JsonWebKeySet, error) {
+func (r *JWKRetrieverWebCaching) Retrieve(resolver JWKSURLResolver) (jwt.VerificationKeySet, error) {
 	// If we have not initialized the cache, or if our cached credentials are expired, renew them.
 	if r.cached == nil || r.retrieved == time.Unix(0, 0) || r.retrieved.Add(r.interval).After(time.Now()) {
 		k, e := r.internal.Retrieve(resolver)
 		if e != nil {
-			return nil, e
+			return jwt.VerificationKeySet{}, e
 		} else {
-			r.cached = k
+			r.cached = &k
 			r.retrieved = time.Now()
 			return k, nil
 		}
 		// otherwise return cache
 	} else {
-		return r.cached, nil
+		return *r.cached, nil
 	}
 }
 
